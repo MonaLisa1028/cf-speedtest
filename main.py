@@ -1,34 +1,34 @@
-import subprocess
-import re
-from concurrent.futures import ThreadPoolExecutor
+import socket
+import time
 
-# 你的 IP 列表文件
-IP_FILE = "hk_ips.txt"
-
-def test_speed(ip_line):
-    target = ip_line.split('#')[0].strip()
-    
-    # 使用 curl 直接测速，获取下载速度
-    # --connect-timeout 2: 连接超时
-    # --max-time 5: 最长运行 5 秒
-    # -o /dev/null: 不保存文件
-    # -w: 获取下载速度 (bytes_downloaded / time_spent)
-    cmd = f"curl -x {target} -L --connect-timeout 2 --max-time 5 -o /dev/null -s -w '%{{speed_download}}' https://speed.cloudflare.com/__down?bytes=10000000"
-    
+def test_speed(target_ip):
+    # 模拟 Cloudflare 的下载请求
+    request = b"GET /__down?bytes=10000000 HTTP/1.1\r\nHost: speed.cloudflare.com\r\nConnection: close\r\n\r\n"
     try:
-        result = subprocess.check_output(cmd, shell=True).decode('utf-8')
-        # speed_download 的单位是 bytes/s，转换为 Mbps (bytes * 8 / 1000000)
-        speed_mbps = (float(result) * 8) / 1000000
-        return f"{ip_line} | {speed_mbps:.2f} Mbps"
-    except:
-        return f"{ip_line} | 测速失败"
+        start_time = time.time()
+        # 建立底层连接
+        s = socket.create_connection((target_ip, 443), timeout=10)
+        s.sendall(request)
+        
+        # 接收数据并计算流量
+        total_received = 0
+        while True:
+            data = s.recv(4096)
+            if not data: break
+            total_received += len(data)
+        
+        duration = time.time() - start_time
+        speed_mbps = (total_received * 8) / (duration * 1000000)
+        s.close()
+        return f"{target_ip} | {speed_mbps:.2f} Mbps"
+    except Exception as e:
+        return f"{target_ip} | 测速失败 (原因: {str(e)[:15]})"
 
-with open(IP_FILE, "r", encoding="utf-8") as f:
-    ips = [line.strip() for line in f if line.strip()]
+# 读取 IP
+with open("hk_ips.txt", "r") as f:
+    ip = f.read().strip()
 
-with ThreadPoolExecutor(max_workers=5) as executor:
-    results = list(executor.map(test_speed, ips))
-
-with open("result.txt", "w", encoding="utf-8") as f:
-    for res in results:
-        f.write(res + "\n")
+# 执行测速
+result = test_speed(ip)
+with open("result.txt", "w") as f:
+    f.write(result)
