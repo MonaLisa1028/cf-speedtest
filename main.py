@@ -1,34 +1,33 @@
-import socket
-import time
+import subprocess
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 # 你的 IP 列表文件
 IP_FILE = "hk_ips.txt"
 
-def check_ip(ip_line):
-    # 只提取 IP 和端口
+def test_speed(ip_line):
     target = ip_line.split('#')[0].strip()
-    host = target.split(':')[0]
-    port = int(target.split(':')[1]) if ':' in target else 443
+    
+    # 使用 curl 直接测速，获取下载速度
+    # --connect-timeout 2: 连接超时
+    # --max-time 5: 最长运行 5 秒
+    # -o /dev/null: 不保存文件
+    # -w: 获取下载速度 (bytes_downloaded / time_spent)
+    cmd = f"curl -x {target} -L --connect-timeout 2 --max-time 5 -o /dev/null -s -w '%{{speed_download}}' https://speed.cloudflare.com/__down?bytes=10000000"
     
     try:
-        # 使用 Socket 尝试 TCP 握手
-        start = time.time()
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(3)
-        s.connect((host, port)) # 如果能连通，说明端口开放
-        latency = (time.time() - start) * 1000
-        s.close()
-        return f"{ip_line} | 连通正常 ({latency:.0f}ms)"
+        result = subprocess.check_output(cmd, shell=True).decode('utf-8')
+        # speed_download 的单位是 bytes/s，转换为 Mbps (bytes * 8 / 1000000)
+        speed_mbps = (float(result) * 8) / 1000000
+        return f"{ip_line} | {speed_mbps:.2f} Mbps"
     except:
-        return f"{ip_line} | 无法连接"
+        return f"{ip_line} | 测速失败"
 
-# 读取 IP
 with open(IP_FILE, "r", encoding="utf-8") as f:
     ips = [line.strip() for line in f if line.strip()]
 
-with ThreadPoolExecutor(max_workers=20) as executor:
-    results = list(executor.map(check_ip, ips))
+with ThreadPoolExecutor(max_workers=5) as executor:
+    results = list(executor.map(test_speed, ips))
 
 with open("result.txt", "w", encoding="utf-8") as f:
     for res in results:
