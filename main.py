@@ -2,42 +2,46 @@ import requests
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-# 读取 IP 列表
-with open("hk_ips.txt", "r") as f:
+# 强制路径读取，确保一定能找到 hk_ips.txt
+import os
+file_path = "hk_ips.txt"
+
+if not os.path.exists(file_path):
+    print(f"错误：找不到文件 {file_path}")
+    exit(1)
+
+with open(file_path, "r", encoding="utf-8") as f:
     ips = [line.strip() for line in f if line.strip()]
 
+print(f"已成功加载 {len(ips)} 个IP节点，开始测速...")
+
 def test_ip(ip_line):
-    # 这一行代码能自动从 "91.193.59.164:443#HK..." 中提取出 "91.193.59.164:443"
-    target_ip = ip_line.split('#')[0].strip()
-    
+    # 提取 IP:端口
+    target = ip_line.split('#')[0].strip()
     try:
-        # 1. 测延迟
+        # 测延迟
         start = time.time()
-        # 将 target_ip 放入 requests 请求中
-        res = requests.get(f"https://{target_ip}", timeout=2, verify=False)
+        requests.get(f"https://{target}", timeout=2, verify=False)
         latency = (time.time() - start) * 1000
         
-        # 2. 测带宽
+        # 测带宽
         start_bw = time.time()
         res_bw = requests.get("https://speed.cloudflare.com/__down?bytes=500000", timeout=3)
         duration = time.time() - start_bw
-        speed = 0.5 / duration # Mbps
+        speed = 0.5 / duration 
         
-        return (ip_line, latency, speed) # 返回原始行，保持完整信息
+        return (ip_line, latency, speed)
     except:
         return (ip_line, 999, 0)
 
-# 使用 20 个线程并发测速
-print(f"开始测试 {len(ips)} 个节点...")
 with ThreadPoolExecutor(max_workers=20) as executor:
     results = list(executor.map(test_ip, ips))
 
-# 过滤掉失败的节点，按延迟排序，再按带宽排序
+# 排序并过滤掉失败的(延迟=999)
+results = [r for r in results if r[1] < 999]
 results.sort(key=lambda x: (x[1], -x[2]))
 
-# 保存结果
-with open("result.txt", "w") as f:
+with open("result.txt", "w", encoding="utf-8") as f:
     f.write("IP | 延迟(ms) | 带宽(Mbps)\n")
     for ip, lat, spd in results:
-        if lat < 999: # 只显示成功的
-            f.write(f"{ip} {lat:.0f}ms {spd:.2f}Mbps\n")
+        f.write(f"{ip} {lat:.0f}ms {spd:.2f}Mbps\n")
