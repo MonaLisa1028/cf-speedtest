@@ -1,4 +1,4 @@
-name: CF Speedtest Final
+name: CF Speedtest
 on:
   workflow_dispatch:
 
@@ -7,15 +7,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Run Speedtest
+      - name: Run Speedtest & Format
         run: |
+          # 1. 下载工具
           wget -q https://github.com/XIU2/CloudflareSpeedTest/releases/download/v2.2.5/CloudflareST_linux_amd64.tar.gz
           tar -zxvf CloudflareST_linux_amd64.tar.gz
           
-          # 核心修改：强制让工具直接读取你的 hk_ips.txt，拒绝任何硬编码
-          # -f 参数指向你的真实 IP 文件，不再手动 echo
-          ./CloudflareST -f hk_ips.txt -n 10 -tl 500 -o result.txt
+          # 2. 测速并将结果存入中间文件 temp.csv
+          ./CloudflareST -f hk_ips.txt -n 10 -tl 500 -o temp.csv
           
+          # 3. 使用 awk 直接处理 CSV 并转换为中文报告，直接覆盖写入 result.txt
+          echo "=== 测速报告 ===" > result.txt
+          awk -F, 'NR>1 {printf "IP: %s\n延迟: %sms | 丢包: %s%%\n下载: %s MB/s (约 %d Mbps)\n------------------\n", $1, $5, $4, $6, $6*8}' temp.csv >> result.txt
+          
+          # 4. 打印查看
           cat result.txt
           
       - name: Push Result
@@ -23,5 +28,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add result.txt
-          git commit -m "Update correct Speedtest Result" || exit 0
+          git commit -m "Update Speedtest Result" || exit 0
           git push
