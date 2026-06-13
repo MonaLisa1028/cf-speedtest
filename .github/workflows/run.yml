@@ -1,4 +1,4 @@
-name: CF Speedtest
+name: CF Speedtest Final
 on:
   workflow_dispatch:
 
@@ -9,21 +9,13 @@ jobs:
       - uses: actions/checkout@v3
       - name: Run Speedtest
         run: |
-          # 1. 下载 CloudflareST 官方工具
           wget -q https://github.com/XIU2/CloudflareSpeedTest/releases/download/v2.2.5/CloudflareST_linux_amd64.tar.gz
           tar -zxvf CloudflareST_linux_amd64.tar.gz
           
-          # 2. 将你的 IP 写入工具要求的格式文件
-          # 假设 hk_ips.txt 里只有 IP，或者有端口，工具会自动识别
-          echo "172.234.24.35" > ip.txt
+          # 核心修改：强制让工具直接读取你的 hk_ips.txt，拒绝任何硬编码
+          # -f 参数指向你的真实 IP 文件，不再手动 echo
+          ./CloudflareST -f hk_ips.txt -n 10 -tl 500 -o result.txt
           
-          # 3. 运行测速
-          # -n 10: 测试 10 次取平均
-          # -tl 500: 延迟上限 500ms
-          # -o result.txt: 输出到文件
-          ./CloudflareST -n 10 -tl 500 -o result.txt
-          
-          # 4. 打印结果到日志，方便你直接看
           cat result.txt
           
       - name: Push Result
@@ -31,5 +23,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add result.txt
-          git commit -m "Update Speedtest Result" || exit 0
+          git commit -m "Update correct Speedtest Result" || exit 0
           git push
