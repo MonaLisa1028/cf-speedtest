@@ -1,21 +1,35 @@
-name: Speedtest Workflow
+name: CF Speedtest
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install requests
-        run: pip install requests
-      - name: Run Test
-        run: python main.py
+      - name: Run Speedtest
+        run: |
+          # 1. 下载 CloudflareST 官方工具
+          wget -q https://github.com/XIU2/CloudflareSpeedTest/releases/download/v2.2.5/CloudflareST_linux_amd64.tar.gz
+          tar -zxvf CloudflareST_linux_amd64.tar.gz
+          
+          # 2. 将你的 IP 写入工具要求的格式文件
+          # 假设 hk_ips.txt 里只有 IP，或者有端口，工具会自动识别
+          echo "172.234.24.35" > ip.txt
+          
+          # 3. 运行测速
+          # -n 10: 测试 10 次取平均
+          # -tl 500: 延迟上限 500ms
+          # -o result.txt: 输出到文件
+          ./CloudflareST -n 10 -tl 500 -o result.txt
+          
+          # 4. 打印结果到日志，方便你直接看
+          cat result.txt
+          
       - name: Push Result
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add result.txt
-          git commit -m "Update result" || exit 0
-          # 下面这行是核心：通过 GITHUB_TOKEN 授权推送
-          git push "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
+          git commit -m "Update Speedtest Result" || exit 0
+          git push
